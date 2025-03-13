@@ -22,6 +22,7 @@ import com.google.cloud.spanner.ReadContext.QueryAnalyzeMode;
 import com.google.cloud.spanner.ResultSet;
 import com.google.cloud.spanner.Spanner;
 import com.google.cloud.spanner.SpannerOptions;
+import com.google.common.collect.Lists;
 import io.grpc.opentelemetry.GrpcOpenTelemetry;
 import io.opentelemetry.sdk.resources.Resource;
 import com.google.cloud.spanner.Statement;
@@ -36,6 +37,7 @@ import io.opentelemetry.sdk.metrics.SdkMeterProvider;
 import io.opentelemetry.sdk.metrics.export.PeriodicMetricReader;
 import io.opentelemetry.sdk.trace.SdkTracerProvider;
 import io.opentelemetry.sdk.trace.export.SimpleSpanProcessor;
+import java.util.Collection;
 
 /**
  * This sample demonstrates how to configure OpenTelemetry and inject via Spanner Options.
@@ -99,8 +101,10 @@ public class OpenTelemetryUsage {
   }
 
   private static void setGRPCMetrics(OpenTelemetry openTelemetry) {
+
+    Collection<String> enabledMetrics = Lists.newArrayList("grpc.lb.rls.default_target_picks", "grpc.xds_client.resource_updates_valid");
     GrpcOpenTelemetry grpcOpenTelemetry =
-        GrpcOpenTelemetry.newBuilder().sdk(openTelemetry).build();
+        GrpcOpenTelemetry.newBuilder().sdk(openTelemetry).enableMetrics(enabledMetrics).build();
     try {
         grpcOpenTelemetry.registerGlobal();
     } catch (IllegalStateException ex) {
