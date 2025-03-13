@@ -22,6 +22,8 @@ import com.google.cloud.spanner.ReadContext.QueryAnalyzeMode;
 import com.google.cloud.spanner.ResultSet;
 import com.google.cloud.spanner.Spanner;
 import com.google.cloud.spanner.SpannerOptions;
+import io.grpc.opentelemetry.GrpcOpenTelemetry;
+import io.opentelemetry.sdk.resources.Resource;
 import com.google.cloud.spanner.Statement;
 import com.google.protobuf.Value;
 import io.opentelemetry.api.OpenTelemetry;
@@ -42,20 +44,24 @@ public class OpenTelemetryUsage {
 
   public static void main(String[] args) {
     // TODO(developer): Replace these variables before running the sample.
-    String projectId = "my-project";
-    String instanceId = "my-instance";
-    String databaseId = "my-database";
+    String projectId = "span-cloud-testing";
+    String instanceId = "hailongwen-testing";
+    String databaseId = "example-db";
 
     // [START spanner_opentelemetry_usage]
     // Enable OpenTelemetry metrics and traces before Injecting OpenTelemetry
     SpannerOptions.enableOpenTelemetryMetrics();
     SpannerOptions.enableOpenTelemetryTraces();
+    Resource resource = Resource
+        .getDefault().merge(Resource.builder().put("service.name", "surbhi").build());
+
 
     // Create a new meter provider
     SdkMeterProvider sdkMeterProvider = SdkMeterProvider.builder()
         // Use Otlp exporter or any other exporter of your choice.
         .registerMetricReader(
             PeriodicMetricReader.builder(OtlpGrpcMetricExporter.builder().build()).build())
+        .setResource(resource)
         .build();
 
     // Create a new tracer provider
@@ -65,12 +71,15 @@ public class OpenTelemetryUsage {
             .builder().build()).build())
             .build();
 
+
+
     // Configure OpenTelemetry object using Meter Provider and Tracer Provider
     OpenTelemetry openTelemetry = OpenTelemetrySdk.builder()
         .setMeterProvider(sdkMeterProvider)
-        .setTracerProvider(sdkTracerProvider)
-        .build();
+        // .setTracerProvider(sdkTracerProvider)
+        .buildAndRegisterGlobal();
 
+    setGRPCMetrics(openTelemetry);
     // Inject OpenTelemetry object via Spanner options or register as GlobalOpenTelemetry.
     SpannerOptions options = SpannerOptions.newBuilder()
         .setOpenTelemetry(openTelemetry)
@@ -89,6 +98,15 @@ public class OpenTelemetryUsage {
     // [END spanner_opentelemetry_usage]
   }
 
+  private static void setGRPCMetrics(OpenTelemetry openTelemetry) {
+    GrpcOpenTelemetry grpcOpenTelemetry =
+        GrpcOpenTelemetry.newBuilder().sdk(openTelemetry).build();
+    try {
+        grpcOpenTelemetry.registerGlobal();
+    } catch (IllegalStateException ex) {
+        // LOGGER.warn("Error while Registering the GRPC: {}", ex.getMessage());
+    }
+ }
 
   // [START spanner_opentelemetry_capture_query_stats_metric]
   static void captureQueryStatsMetric(OpenTelemetry openTelemetry, DatabaseClient dbClient) {
