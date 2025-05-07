@@ -81,7 +81,7 @@ public class OpenTelemetryUsage {
         // .setTracerProvider(sdkTracerProvider)
         .buildAndRegisterGlobal();
 
-    setGRPCMetrics(openTelemetry);
+    // setGRPCMetrics(openTelemetry);
     // Inject OpenTelemetry object via Spanner options or register as GlobalOpenTelemetry.
     SpannerOptions options = SpannerOptions.newBuilder()
         .setOpenTelemetry(openTelemetry)
@@ -104,9 +104,12 @@ public class OpenTelemetryUsage {
 
     Collection<String> enabledMetrics = Lists.newArrayList("grpc.lb.rls.default_target_picks", "grpc.xds_client.resource_updates_valid");
     GrpcOpenTelemetry grpcOpenTelemetry =
-        GrpcOpenTelemetry.newBuilder().sdk(openTelemetry).enableMetrics(enabledMetrics).build();
+        GrpcOpenTelemetry.newBuilder().sdk(openTelemetry)
+        .enableMetrics(enabledMetrics)
+        .build();
     try {
         grpcOpenTelemetry.registerGlobal();
+        grpcOpenTelemetry.configureChannelBuilder(null);
     } catch (IllegalStateException ex) {
         // LOGGER.warn("Error while Registering the GRPC: {}", ex.getMessage());
     }
@@ -150,14 +153,16 @@ public class OpenTelemetryUsage {
     // GFE_latency and other Spanner metrics are automatically collected
     // when OpenTelemetry metrics are enabled.
 
-    try (ResultSet resultSet =
-        dbClient
-            .singleUse() // Execute a single read or query against Cloud Spanner.
-            .executeQuery(Statement.of("SELECT SingerId, AlbumId, AlbumTitle FROM Albums"))) {
-      while (resultSet.next()) {
-        System.out.printf(
-            "%d %d %s", resultSet.getLong(0), resultSet.getLong(1), resultSet.getString(2));
-      }
+    for(int i=0; i< 100; i++) {
+        try (ResultSet resultSet =
+            dbClient
+                .singleUse() // Execute a single read or query against Cloud Spanner.
+                .executeQuery(Statement.of("SELECT SingerId, AlbumId, AlbumTitle FROM Albums"))) {
+        while (resultSet.next()) {
+            System.out.printf(
+                "%d %d %s", resultSet.getLong(0), resultSet.getLong(1), resultSet.getString(2));
+        }
+        }
     }
   }
   // [END spanner_opentelemetry_gfe_metric]
