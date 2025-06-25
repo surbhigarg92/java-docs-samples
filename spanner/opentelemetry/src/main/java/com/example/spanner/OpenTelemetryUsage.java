@@ -24,14 +24,20 @@ import com.google.cloud.spanner.Spanner;
 import com.google.cloud.spanner.SpannerOptions;
 import com.google.cloud.spanner.Statement;
 import com.google.protobuf.Value;
+
+import io.grpc.opentelemetry.GrpcOpenTelemetry;
 import io.opentelemetry.api.OpenTelemetry;
+import io.opentelemetry.api.common.Attributes;
 import io.opentelemetry.api.metrics.DoubleHistogram;
 import io.opentelemetry.api.metrics.Meter;
+import io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator;
+import io.opentelemetry.context.propagation.ContextPropagators;
 import io.opentelemetry.exporter.otlp.metrics.OtlpGrpcMetricExporter;
 import io.opentelemetry.exporter.otlp.trace.OtlpGrpcSpanExporter;
 import io.opentelemetry.sdk.OpenTelemetrySdk;
 import io.opentelemetry.sdk.metrics.SdkMeterProvider;
 import io.opentelemetry.sdk.metrics.export.PeriodicMetricReader;
+import io.opentelemetry.sdk.resources.Resource;
 import io.opentelemetry.sdk.trace.SdkTracerProvider;
 import io.opentelemetry.sdk.trace.export.SimpleSpanProcessor;
 
@@ -51,6 +57,10 @@ public class OpenTelemetryUsage {
     SpannerOptions.enableOpenTelemetryMetrics();
     SpannerOptions.enableOpenTelemetryTraces();
 
+    Resource resource = Resource.getDefault()
+            .merge(Resource.create(Attributes.builder().put("service.name", "surbhi1").build()
+            ));
+
     // Create a new meter provider
     SdkMeterProvider sdkMeterProvider = SdkMeterProvider.builder()
         // Use Otlp exporter or any other exporter of your choice.
@@ -62,20 +72,29 @@ public class OpenTelemetryUsage {
     SdkTracerProvider sdkTracerProvider = SdkTracerProvider.builder()
         // Use Otlp exporter or any other exporter of your choice.
         .addSpanProcessor(SimpleSpanProcessor.builder(OtlpGrpcSpanExporter
-            .builder().build()).build())
+            .builder().build()).build()).addResource(resource)
             .build();
 
     // Configure OpenTelemetry object using Meter Provider and Tracer Provider
     OpenTelemetry openTelemetry = OpenTelemetrySdk.builder()
         .setMeterProvider(sdkMeterProvider)
         .setTracerProvider(sdkTracerProvider)
+        .setPropagators(ContextPropagators.create(W3CTraceContextPropagator.getInstance()))
         .build();
+
+    GrpcOpenTelemetry grpcOpenTelemetry = GrpcOpenTelemetry.newBuilder().sdk(openTelemetry).build();
+    grpcOpenTelemetry.registerGlobal();
 
     // Inject OpenTelemetry object via Spanner options or register as GlobalOpenTelemetry.
     SpannerOptions options = SpannerOptions.newBuilder()
         .setOpenTelemetry(openTelemetry)
+        .setEnableEndToEndTracing(true)
+        .setEnableApiTracing(true)
+        .setEnableExtendedTracing(true)
         .build();
     Spanner spanner = options.getService();
+
+
 
     DatabaseClient dbClient = spanner
         .getDatabaseClient(DatabaseId.of(projectId, instanceId, databaseId));
@@ -128,14 +147,16 @@ public class OpenTelemetryUsage {
     // GFE_latency and other Spanner metrics are automatically collected
     // when OpenTelemetry metrics are enabled.
 
-    try (ResultSet resultSet =
-        dbClient
-            .singleUse() // Execute a single read or query against Cloud Spanner.
-            .executeQuery(Statement.of("SELECT SingerId, AlbumId, AlbumTitle FROM Albums"))) {
-      while (resultSet.next()) {
-        System.out.printf(
-            "%d %d %s", resultSet.getLong(0), resultSet.getLong(1), resultSet.getString(2));
-      }
+    for(int i=0; i< 1000; i++) {
+        try (ResultSet resultSet =
+            dbClient
+                .singleUse() // Execute a single read or query against Cloud Spanner.
+                .executeQuery(Statement.of("SELECT SingerId, AlbumId, AlbumTitle FROM Albums"))) {
+        while (resultSet.next()) {
+            System.out.printf(
+                "%d %d %s", resultSet.getLong(0), resultSet.getLong(1), resultSet.getString(2));
+        }
+        }
     }
   }
   // [END spanner_opentelemetry_gfe_metric]
